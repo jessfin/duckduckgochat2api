@@ -6,14 +6,12 @@ async def fetch(req):
     if req.method == "OPTIONS":
         return web.Response(body="", headers={'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*'}, status=204)
 
-    # 解析请求数据
     body = await req.json()
 
     messages = body.get("messages", [])
     model_name = body.get("model", "claude-instant-1.2")
     stream = body.get("stream", False)
 
-    # 构造新的请求体
     new_messages = []
     for message in messages:
         role = message.get("role")
@@ -67,23 +65,20 @@ async def stream_response(req, resp):
     writer.headers['Access-Control-Allow-Headers'] = '*'
     writer.headers['Content-Type'] = 'text/event-stream; charset=UTF-8'
 
-    await writer.prepare(req)  # Prepare the writer before starting to receive chunks
+    await writer.prepare(req)
 
-    # Create a temporary file
     with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp:
         async for chunk in resp.content.iter_any():
             chunk_str = chunk.decode('utf-8')
             if chunk_str == 'data: [DONE]':
                 break
-            temp.write(chunk_str + '\n')  # Write each chunk to the temporary file
-
-    # Open the temporary file and process each chunk
+            temp.write(chunk_str + '\n')
     with open(temp.name, 'r') as file:
         for chunk_str in file:
             try:
-                chunk_json = json.loads(chunk_str[6:])  # Remove the 'data: ' prefix and parse the JSON
+                chunk_json = json.loads(chunk_str[6:])
             except json.JSONDecodeError:
-                continue  # Ignore chunks that are not valid JSON
+                continue
 
             message = chunk_json.get("message", "")
             model = chunk_json.get("model", "")
@@ -114,7 +109,7 @@ async def stream_response(req, resp):
             }
 
             event_data = f"data: {json.dumps(wrapped_chunk, ensure_ascii=False)}\n\n"
-            await writer.write(event_data.encode('utf-8'))  # Write the chunk to the stream immediately
+            await writer.write(event_data.encode('utf-8'))  
 
     return writer
 
